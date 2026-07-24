@@ -260,6 +260,8 @@ def run_training(
             config,
             device,
         )
+        # Count optimization steps globally, including rejected candidates.
+        candidate_trainer.training_steps = best_trainer.training_steps
 
         train_metrics = candidate_trainer.train_from_buffer(
             replay_buffer=replay,
@@ -300,6 +302,8 @@ def run_training(
             print("Candidate promoted")
         else:
             # Candidate 被拒绝后，best 保持不变。
+            # Keep best weights while preserving the global step count.
+            best_trainer.training_steps = candidate_trainer.training_steps
             print("Candidate rejected")
 
         metrics = {}
