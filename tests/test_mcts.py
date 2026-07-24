@@ -494,3 +494,27 @@ def test_mcts_with_cuda_network(
         1.0,
         abs=1e-6,
     )
+
+
+def test_sample_action_accepts_float32_rounding_error() -> None:
+    class DummyEvaluator:
+        def evaluate(self, state):
+            return np.zeros(81, dtype=np.float64), 0.0
+
+    game = GomokuGame(board_size=9, connect=5)
+    mcts = MCTS(
+        game=game,
+        evaluator=DummyEvaluator(),
+        config=MCTSConfig(num_simulations=1),
+        seed=42,
+    )
+
+    policy = np.full(81, 1.0 / 81.0, dtype=np.float32)
+
+    # The float32 sum need not be exactly representable as 1.0.
+    for _ in range(100):
+        action = mcts._sample_action(
+            visit_policy=policy,
+            temperature=1.0,
+        )
+        assert 0 <= action < 81

@@ -653,20 +653,34 @@ class MCTS:
         """
         从 visit policy 选择实际动作。
         """
-        probability_sum = float(
-            visit_policy.sum()
+        probabilities = np.asarray(
+            visit_policy,
+            dtype=np.float64,
         )
 
-        if probability_sum <= 0:
+        if not np.all(np.isfinite(probabilities)):
+            raise ValueError(
+                "visit_policy contains NaN or Inf"
+            )
+
+        if np.any(probabilities < 0.0):
+            raise ValueError(
+                "visit_policy contains negative probabilities"
+            )
+
+        probability_sum = float(probabilities.sum())
+
+        if probability_sum <= 0.0:
             return None
-
-        probabilities = (
-            visit_policy.astype(np.float64)
-            / probability_sum
-        )
 
         if temperature == 0:
             return int(np.argmax(probabilities))
+
+        probabilities = probabilities / probability_sum
+
+        # Normalize once more in float64 so Generator.choice() sees
+        # a distribution whose sum is within its strict tolerance.
+        probabilities /= float(probabilities.sum())
 
         return int(
             self.rng.choice(
