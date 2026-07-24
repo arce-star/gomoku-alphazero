@@ -21,7 +21,10 @@ mcts:
   dirichlet_epsilon: 0.25
 
 self_play:
-  games_per_iteration: 1
+  games_per_iteration: 4
+  workers: 2
+  inference_batch_size: 8
+  batch_wait_ms: 2.0
   temperature_moves: 15
   sampling_temperature: 1.0
   add_root_noise: true

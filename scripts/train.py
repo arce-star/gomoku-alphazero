@@ -12,6 +12,7 @@ from alphazero.games.gomoku import GomokuGame
 from alphazero.mcts.search import MCTS, MCTSConfig, TorchNetworkEvaluator
 from alphazero.networks.residual_net import NetworkConfig, PolicyValueNet
 from alphazero.selfplay.episode import SelfPlayConfig, play_episode
+from alphazero.selfplay.worker import play_episodes_parallel
 from alphazero.training.evaluator import ArenaConfig, evaluate_models
 from alphazero.training.replay_buffer import ReplayBuffer
 from alphazero.training.trainer import Trainer, TrainerConfig
@@ -75,59 +76,83 @@ def generate_self_play(
     base_seed = int(config["experiment"]["seed"])
 
     games = int(self_play_config["games_per_iteration"])
+    workers = int(self_play_config.get("workers", 1))
     wins = {1: 0, -1: 0, 0: 0}
     total_moves = 0
     total_examples = 0
     started = time.perf_counter()
 
-    for game_index in range(games):
-        evaluator = TorchNetworkEvaluator(
-            game=game,
+    search_config = MCTSConfig(
+        num_simulations=int(mcts_config["num_simulations"]),
+        c_puct=float(mcts_config["c_puct"]),
+        dirichlet_alpha=float(mcts_config["dirichlet_alpha"]),
+        dirichlet_epsilon=float(mcts_config["dirichlet_epsilon"]),
+    )
+    episode_config = SelfPlayConfig(
+        temperature_moves=int(
+            self_play_config["temperature_moves"]
+        ),
+        sampling_temperature=float(
+            self_play_config["sampling_temperature"]
+        ),
+        add_root_noise=bool(
+            self_play_config["add_root_noise"]
+        ),
+        augment_symmetries=bool(
+            self_play_config["augment_symmetries"]
+        ),
+    )
+
+    if workers > 1:
+        episodes = play_episodes_parallel(
+            board_size=game.board_size,
+            connect=game.connect,
             model=model,
             device=device,
-        )
-
-        mcts = MCTS(
-            game=game,
-            evaluator=evaluator,
-            config=MCTSConfig(
-                num_simulations=int(
-                    mcts_config["num_simulations"]
-                ),
-                c_puct=float(mcts_config["c_puct"]),
-                dirichlet_alpha=float(
-                    mcts_config["dirichlet_alpha"]
-                ),
-                dirichlet_epsilon=float(
-                    mcts_config["dirichlet_epsilon"]
-                ),
+            games=games,
+            workers=workers,
+            mcts_config=search_config,
+            self_play_config=episode_config,
+            base_seed=base_seed,
+            iteration=iteration,
+            inference_batch_size=int(
+                self_play_config.get(
+                    "inference_batch_size",
+                    workers,
+                )
             ),
-            seed=(
-                base_seed
-                + iteration * 100_000
-                + game_index
+            batch_wait_ms=float(
+                self_play_config.get("batch_wait_ms", 2.0)
             ),
         )
+    else:
+        episodes = []
 
-        episode = play_episode(
-            game=game,
-            mcts=mcts,
-            config=SelfPlayConfig(
-                temperature_moves=int(
-                    self_play_config["temperature_moves"]
+        for game_index in range(games):
+            evaluator = TorchNetworkEvaluator(
+                game=game,
+                model=model,
+                device=device,
+            )
+            mcts = MCTS(
+                game=game,
+                evaluator=evaluator,
+                config=search_config,
+                seed=(
+                    base_seed
+                    + iteration * 100_000
+                    + game_index
                 ),
-                sampling_temperature=float(
-                    self_play_config["sampling_temperature"]
-                ),
-                add_root_noise=bool(
-                    self_play_config["add_root_noise"]
-                ),
-                augment_symmetries=bool(
-                    self_play_config["augment_symmetries"]
-                ),
-            ),
-        )
+            )
+            episodes.append(
+                play_episode(
+                    game=game,
+                    mcts=mcts,
+                    config=episode_config,
+                )
+            )
 
+    for game_index, episode in enumerate(episodes):
         replay.extend(episode.examples)
         wins[episode.winner] += 1
         total_moves += episode.move_count
@@ -144,12 +169,14 @@ def generate_self_play(
 
     return {
         "self_play/games": float(games),
+        "self_play/workers": float(min(workers, games)),
         "self_play/moves": float(total_moves),
         "self_play/examples": float(total_examples),
         "self_play/black_wins": float(wins[1]),
         "self_play/white_wins": float(wins[-1]),
         "self_play/draws": float(wins[0]),
         "self_play/seconds": elapsed,
+        "self_play/games_per_second": games / max(elapsed, 1e-9),
     }
 
 
