@@ -234,3 +234,41 @@ def test_missing_checkpoint(tmp_path: Path) -> None:
             tmp_path / "missing.ckpt",
             model=model,
         )
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA unavailable",
+)
+def test_load_checkpoint_with_cuda_map_location(
+    tmp_path: Path,
+) -> None:
+    seed_everything(789)
+
+    model = make_model().to("cuda")
+    trainer = Trainer(
+        model=model,
+        device="cuda",
+        config=TrainerConfig(use_amp=True),
+    )
+
+    path = tmp_path / "cuda-map-location.ckpt"
+
+    save_checkpoint(
+        path,
+        model=model,
+        trainer=trainer,
+        iteration=2,
+        config={"device": "cuda"},
+    )
+
+    metadata = load_checkpoint(
+        path,
+        model=model,
+        trainer=trainer,
+        map_location=trainer.device,
+        restore_rng=True,
+    )
+
+    assert metadata.iteration == 2
+    assert trainer.device == torch.device("cuda:0")

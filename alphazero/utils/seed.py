@@ -75,7 +75,20 @@ def restore_rng_state(
 
     random.setstate(state["python"])
     np.random.set_state(state["numpy"])
-    torch.set_rng_state(state["torch_cpu"])
+
+    # map_location="cuda" may move RNG tensors to CUDA, but
+    # PyTorch RNG restore APIs expect CPU uint8 tensors.
+    torch_cpu_state = state["torch_cpu"]
+
+    if not torch.is_tensor(torch_cpu_state):
+        raise TypeError("torch_cpu RNG state must be a tensor")
+
+    torch.set_rng_state(
+        torch_cpu_state.detach().to(
+            device="cpu",
+            dtype=torch.uint8,
+        )
+    )
 
     cuda_state = state["torch_cuda"]
 
@@ -94,4 +107,21 @@ def restore_rng_state(
                 f"{current_devices} != {len(cuda_state)}"
             )
 
-        torch.cuda.set_rng_state_all(cuda_state)
+        normalized_cuda_state = []
+
+        for device_state in cuda_state:
+            if not torch.is_tensor(device_state):
+                raise TypeError(
+                    "CUDA RNG state must contain tensors"
+                )
+
+            normalized_cuda_state.append(
+                device_state.detach().to(
+                    device="cpu",
+                    dtype=torch.uint8,
+                )
+            )
+
+        torch.cuda.set_rng_state_all(
+            normalized_cuda_state
+        )
