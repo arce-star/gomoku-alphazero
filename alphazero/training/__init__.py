@@ -1,3 +1,11 @@
+from alphazero.training.evaluator import (
+    ArenaConfig,
+    ArenaGameResult,
+    ArenaResult,
+    evaluate_agents,
+    evaluate_models,
+    play_arena_game,
+)
 from alphazero.training.replay_buffer import (
     ReplayBatch,
     ReplayBuffer,
@@ -11,6 +19,12 @@ from alphazero.training.trainer import (
 )
 
 __all__ = [
+    "ArenaConfig",
+    "ArenaGameResult",
+    "ArenaResult",
+    "play_arena_game",
+    "evaluate_agents",
+    "evaluate_models",
     "ReplayBatch",
     "ReplayBuffer",
     "TorchReplayBatch",
