@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Training outputs
+checkpoints/*
+!checkpoints/.gitkeep
+data/replay/*
+!data/replay/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Models and datasets
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.npz
+*.npy
+*.pkl
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
